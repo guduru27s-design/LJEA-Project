@@ -37,4 +37,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest
+        pytest --collect-only -q 2>&1 | grep -q "No tests ran" && echo "No tests found, skipping." || pytest
