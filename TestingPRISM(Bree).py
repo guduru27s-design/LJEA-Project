@@ -2,71 +2,96 @@ import io
 import zipfile
 import requests
 import rasterio
+from rasterio.io import MemoryFile
 
-# 1. Define your parameters
-latitude = 35.6580
-longitude = -82.0575
-element = "tmin"  # Options: ppt (precip), tmin, tmax, tmean
-date_string = "20260601"  # YYYYMMDD format (or YYYYMM for monthly)
+def get_daily(latitude, longitude, date_string):
+    #gets PRISM data for a single day and returns tmin, tmax, tmean, ppt in a dictionary
+    year = date_string[:4] #need this for url
 
-# 2. PRISM API URL
-# We append ?json=true to get a clean data format back
-url = f"https://services.nacse.org/prism/data/get/us/4km/{element}/{date_string}"
+    elements = ["ppt", "tmin", "tmax", "tmean"]
+    results = {}
 
-try:
-    # 3. Make the request to download map data (rastorio)
-    print("connect to PRISM server to download map...")
-    response = requests.get(url)
-    response.raise_for_status()  # Check for errors
-    print("data retrieved successfully!")
+    for element in elements:
 
-    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        #look inside zip folder and find the main map image file
-        raster_file = [f for f in z.namelist() if f.endswith('.tif') or f.endswith('.bil')][0]
+        url = (
+        f"https://data.prism.oregonstate.edu/time_series/us/an/4km/{element}/daily/{year}/prism_{element}_us_25m_{date_string}.zip"
+        )
 
-        with z.open(raster_file) as f:
-            with rasterio.open(f) as src:
-                #translate lat lon coords into map pixels
-                row, col = src.index(longitude, latitude)
-                band1 = src.read(1)  # Read the first band (temperature data)
-                temperature = band1[row, col]  # Get the temperature value at the specified location
+        r = requests.get(url)
+        r.raise_for_status()
+
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z: #z is zipfile
         
-        unit = "mm" if element == "ppt" else "°C"
+            raster_file = [
+                f for f in z.namelist()
+                if f.endswith(".tif")
+            ][0]
 
-        print("PRISM DATA:")
-        print(f"Date: {date_string}")
-        print(f"Coordinates: {latitude}, {longitude}")
-        print(f"Element: {element}")
-        print(f"Value: {temperature} {unit}")
+            with z.open(raster_file) as tif_file:
+                tif_bytes = tif_file.read()
+            with MemoryFile(tif_bytes) as memfile:
+                with memfile.open() as src:
+                    row, col = src.index(longitude, latitude)
 
-    '''
-    data = response.json()
-    temperature = data['data'][0]
-    print(f"The temperature value is: {temperature}°C")
-    print(data)
+                    band1 = src.read(1)
 
-    IN THE DATA THAT IS PRINTED, HERE IS THE CONTEXT [1,2,3,4,5]
+                    value = band1[row, col]
 
-    1. The Target Weather Date you requested
-    2. The Release Date (when OSU last updated this specific day's data)
-    3. The Weather Element (Maximum Temperature)
-    4. Grid Count (The stability version of the data file)
-    5. The actual Direct Download Link to fetch the full map file for that day
+                    results[element] = float(value)
 
-    '''
-    # THIS ONLY TELLS YOU THE TYPE OF DATA WE'RE LOOKING FOR (AKA MAX TEMPERATURE)
-    # print(data[2])
+    return results
 
-    '''
-    
-    To see the data of the data, we use the 'data' KEY from the API to look at the
-    actual value of the element that popped up in the reponse list
-    
-    '''
-    
-except requests.exceptions.RequestException as e:
-    print(f"An error occurred while downloading: {e}")
-except IndexError:
-    print("Error: Could not find the climate map image inside the downloaded package.")
-except Exception as e:
-    print(f"An error occurred while extracting the pixel value: {e}")
+# - - - TESTING PART - - - 
+
+data = get_daily(35.6580,-82.0575,"20200101")
+
+print(data)
+
+# - - - END TESTING PART - - - 
+
+def get_monthly(latitude, longitude, date_string):
+    #gets PRISM data for a single month and returns tmin, tmax, tmean, ppt in a dictionary
+    year = date_string[:4] #need this for url
+    month = date_string[4:6]
+    date_string = f"{year}{month}" #need this for url for month since it can't be more than 6 characters!
+
+    elements = ["ppt", "tmin", "tmax", "tmean"]
+    results = {}
+
+    for element in elements:
+
+        url = (
+        f"https://data.prism.oregonstate.edu/time_series/us/an/4km/{element}/monthly/{year}/prism_{element}_us_25m_{date_string}.zip"
+        )
+
+        r = requests.get(url)
+        r.raise_for_status()
+
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z: #z is zipfile
+        
+            raster_file = [
+                f for f in z.namelist()
+                if f.endswith(".tif")
+            ][0]
+
+            with z.open(raster_file) as tif_file:
+                tif_bytes = tif_file.read()
+            with MemoryFile(tif_bytes) as memfile:
+                with memfile.open() as src:
+                    row, col = src.index(longitude, latitude)
+
+                    band1 = src.read(1)
+
+                    value = band1[row, col]
+
+                    results[element] = float(value)
+
+    return results
+
+# - - - TESTING PART - - - 
+
+month_data = get_monthly(35.6580,-82.0575,"20200101")
+
+print(month_data)
+
+# - - - END TESTING PART - - - 
