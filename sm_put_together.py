@@ -1,4 +1,7 @@
-import narwhal as when
+#ADDING PRISM AND NWIS
+'''
+THIS IS A NEW FILE TO TEST ADDING PRISM AND NWIS CODE TOGETHER :)
+'''
 import pandas as pd
 import statsmodels.formula.api as smf
 import matplotlib.pyplot as plt
@@ -8,7 +11,7 @@ import requests
 import json
 import copy
 
-# NEW PRISM IMPORTS - - - -
+# PRISM IMPORTS - - - -
 import io
 import zipfile
 import rasterio
@@ -21,6 +24,8 @@ from shapely.geometry import shape, box
 from rasterio.mask import mask as rio_mask
 from shapely.ops import transform
 import pyproj
+
+from datetime import datetime, timedelta
 # - - - - - - - - - -
 
 NWIS_SITE_URL     = "https://waterservices.usgs.gov/nwis/site/"
@@ -71,7 +76,7 @@ delineation = delineate_watershed(
 print("\nDelineation complete.")
 print("Top-level keys:", list(delineation.keys()))
 
-# ── NEW: extract watershed polygon (PRISM) ──
+# ── NEW: extract watershed polygon from StreamStats ──
 def extract_watershed_polygon(delineation_response: dict):
     """
     Pulls global watershed geometry from StreamStats response.
@@ -93,10 +98,6 @@ def extract_watershed_polygon(delineation_response: dict):
 polygon = extract_watershed_polygon(delineation)
 
 print(f"Watershed polygon geometry type: {polygon['type']}")
-
-# - - - - - 
-
-# - - - - NEW (PRISM) - - - -
 
 def get_basin_prism(polygon_geojson, date_string):
     """
@@ -176,9 +177,6 @@ def get_basin_prism(polygon_geojson, date_string):
         )
 
     return results
-    
-# - - - - - - - - - - -
-
 
 def get_basin_characteristics(delineation_response: dict, char_codes: list = None) -> list:
     """
@@ -251,15 +249,15 @@ df_chars[["name", "value", "unit"]]
 
 print(df_chars[["name", "value", "unit"]])
 
-# - - - - NEW (PRISM) - - - - (ONLY ONE DAY)
+print("\n")
 
-print(f"Fetching basin PRISM data for {STARTDATE}...")
+print(f"Fetching basin PRISM data for {ENDDATE}...")
 
 if polygon is None:
     print("No polygon found — skipping PRISM")
     prism_data = None
 else:
-    prism_data = get_basin_prism(polygon, STARTDATE)
+    prism_data = get_basin_prism(polygon, ENDDATE)
 
 # Convert PRISM units
 
@@ -268,11 +266,6 @@ ppt_inches = prism_data["ppt"] / 25.4
 tmin_f = (prism_data["tmin"] * 9/5) + 32
 tmax_f = (prism_data["tmax"] * 9/5) + 32
 tmean_f = (prism_data["tmean"] * 9/5) + 32
-
-print(f"Precipitation: {ppt_inches:.2f} in")
-print(f"Minimum Temperature: {tmin_f:.1f} °F")
-print(f"Maximum Temperature: {tmax_f:.1f} °F")
-print(f"Mean Temperature: {tmean_f:.1f} °F")
 
 prism_data = {
     "ppt": ppt_inches,
@@ -283,7 +276,7 @@ prism_data = {
 # NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
 # IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)
 
-prism_df = pd.DataFrame({
+prism_day_df = pd.DataFrame({
     "Variable": [
         "Precipitation",
         "Minimum Temperature",
@@ -304,10 +297,82 @@ prism_df = pd.DataFrame({
     ]
 })
 
-print("\nPRISM Climate Data:")
-print(prism_df)
+print("\nPRISM Climate Data (START DAY ONLY):")
+print(prism_day_df)
 
-# - - - - - - - - - -
+print("\n")
+
+def get_basin_prism_range(polygon_geojson, start_date, end_date):
+    
+    current = datetime.strptime(start_date, "%Y%m%d")
+    end = datetime.strptime(end_date, "%Y%m%d")
+
+    all_days = []
+
+    while current <= end:
+
+        date_string = current.strftime("%Y%m%d")
+        print(f"Fetching PRISM data for {date_string}...")
+        daily_data = get_basin_prism(polygon_geojson, date_string)
+        daily_data["date"] = date_string
+
+        all_days.append(daily_data)
+
+        current += timedelta(days=1)
+
+    return all_days
+
+prism_days = get_basin_prism_range(polygon, STARTDATE, ENDDATE)
+
+#averaging for the whole period
+
+ppt_per_sum = sum([d["ppt"] for d in prism_days])
+
+tmin_per_avg = np.mean([d["tmin"] for d in prism_days])
+
+tmax_per_avg = np.mean([d["tmax"] for d in prism_days])
+
+tmean_per_avg = np.mean([d["tmean"] for d in prism_days])
+
+# convert units for the whole period
+
+ppt_per_sum = ppt_per_sum / 25.4
+
+tmin_per_avg = (tmin_per_avg * 9/5) + 32
+tmax_per_avg = (tmax_per_avg * 9/5) + 32
+tmean_per_avg = (tmean_per_avg * 9/5) + 32
+
+prism_period_data = {
+    "ppt": ppt_per_sum,
+    "tmin": tmin_per_avg,
+    "tmax": tmax_per_avg,
+    "tmean": tmean_per_avg
+}
+
+prism_period_df = pd.DataFrame({
+    "Variable": [
+        "Precipitation",
+        "Minimum Temperature",
+        "Maximum Temperature",
+        "Mean Temperature"
+    ],
+    "Value": [
+        round(ppt_per_sum, 2),
+        round(tmin_per_avg, 1),
+        round(tmax_per_avg, 1),
+        round(tmean_per_avg, 1)
+    ],
+    "Unit": [
+        "in",
+        "°F",
+        "°F",
+        "°F"
+    ]
+})
+
+print("\nPRISM Climate Data (PERIOD DATA):")
+print(prism_period_df)
+
 '''
 CN = float(
     ((int(df_chars.loc["LC11CRPHAY", "value"]) / 100) * 
