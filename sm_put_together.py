@@ -1,4 +1,4 @@
-from narwhals import when
+import narwhal as when
 import pandas as pd
 import statsmodels.formula.api as smf
 import matplotlib.pyplot as plt
@@ -7,6 +7,21 @@ import numpy as np
 import requests
 import json
 import copy
+
+# NEW PRISM IMPORTS - - - -
+import io
+import zipfile
+import rasterio
+from rasterio.io import MemoryFile
+
+import numpy as np
+import requests
+
+from shapely.geometry import shape, box
+from rasterio.mask import mask as rio_mask
+from shapely.ops import transform
+import pyproj
+# - - - - - - - - - -
 
 NWIS_SITE_URL     = "https://waterservices.usgs.gov/nwis/site/"
 NWIS_IV_URL       = "https://waterservices.usgs.gov/nwis/iv/"
@@ -55,6 +70,115 @@ delineation = delineate_watershed(
 
 print("\nDelineation complete.")
 print("Top-level keys:", list(delineation.keys()))
+
+# ── NEW: extract watershed polygon (PRISM) ──
+def extract_watershed_polygon(delineation_response: dict):
+    """
+    Pulls global watershed geometry from StreamStats response.
+    """
+    try:
+        fc = delineation_response["bcrequest"]["wsresp"]["featurecollection"]
+
+        for group in fc:
+            for item in group:
+                if item.get("name") == "globalwatershed":
+                    for feat in item["feature"]["features"]:
+                        if feat["properties"].get("GlobalWshd") == 1:
+                            return feat["geometry"]
+    except Exception:
+        pass
+
+    return None
+
+polygon = extract_watershed_polygon(delineation)
+
+print(f"Watershed polygon geometry type: {polygon['type']}")
+
+# - - - - - 
+
+# - - - - NEW (PRISM) - - - -
+
+def get_basin_prism(polygon_geojson, date_string):
+    """
+    Basin-averaged PRISM values using StreamStats polygon.
+    """
+
+    elements = ["ppt", "tmin", "tmax", "tmean"]
+    results = {}
+
+    basin_shape = shape(polygon_geojson)
+
+    for element in elements:
+
+        year = date_string[:4]
+
+        url = (
+            f"https://data.prism.oregonstate.edu/time_series/us/an/4km/"
+            f"{element}/daily/{year}/prism_{element}_us_25m_{date_string}.zip"
+        )
+
+        r = requests.get(url)
+        r.raise_for_status()
+
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+
+            tif_file = [f for f in z.namelist() if f.endswith(".tif")][0]
+
+            with z.open(tif_file) as tif:
+                tif_bytes = tif.read()
+
+            with MemoryFile(tif_bytes) as memfile:
+                with memfile.open() as src:
+
+                    # reproject if needed
+                    if src.crs.to_epsg() != 4326:
+                        project = pyproj.Transformer.from_crs(
+                            "EPSG:4326",
+                            src.crs,
+                            always_xy=True
+                        ).transform
+                        geom = transform(project, basin_shape)
+                    else:
+                        geom = basin_shape
+
+                    masked, tfm = rio_mask(
+                        src,
+                        [geom],
+                        crop=True,
+                        all_touched=True
+                    )
+
+                    data = masked[0].astype(float)
+                    nodata = src.nodata
+
+        rows, cols = np.where(data != nodata)
+
+        weighted_sum = 0.0
+        total_area = 0.0
+
+        for r_i, c_i in zip(rows, cols):
+
+            pixel = box(
+                tfm.c + c_i * tfm.a,
+                tfm.f + (r_i + 1) * tfm.e,
+                tfm.c + (c_i + 1) * tfm.a,
+                tfm.f + r_i * tfm.e,
+            )
+
+            overlap = geom.intersection(pixel).area
+
+            if overlap > 0:
+                weighted_sum += float(data[r_i, c_i]) * overlap
+                total_area += overlap
+
+        results[element] = (
+            weighted_sum / total_area if total_area > 0 else None
+        )
+
+    return results
+    
+# - - - - - - - - - - -
+
 
 def get_basin_characteristics(delineation_response: dict, char_codes: list = None) -> list:
     """
@@ -127,6 +251,64 @@ df_chars[["name", "value", "unit"]]
 
 print(df_chars[["name", "value", "unit"]])
 
+# - - - - NEW (PRISM) - - - - (ONLY ONE DAY)
+
+print(f"Fetching basin PRISM data for {STARTDATE}...")
+
+if polygon is None:
+    print("No polygon found — skipping PRISM")
+    prism_data = None
+else:
+    prism_data = get_basin_prism(polygon, STARTDATE)
+
+# Convert PRISM units
+
+ppt_inches = prism_data["ppt"] / 25.4
+
+tmin_f = (prism_data["tmin"] * 9/5) + 32
+tmax_f = (prism_data["tmax"] * 9/5) + 32
+tmean_f = (prism_data["tmean"] * 9/5) + 32
+
+print(f"Precipitation: {ppt_inches:.2f} in")
+print(f"Minimum Temperature: {tmin_f:.1f} °F")
+print(f"Maximum Temperature: {tmax_f:.1f} °F")
+print(f"Mean Temperature: {tmean_f:.1f} °F")
+
+prism_data = {
+    "ppt": ppt_inches,
+    "tmin": tmin_f,
+    "tmax": tmax_f,
+    "tmean": tmean_f}
+
+# NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
+# IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)
+
+prism_df = pd.DataFrame({
+    "Variable": [
+        "Precipitation",
+        "Minimum Temperature",
+        "Maximum Temperature",
+        "Mean Temperature"
+    ],
+    "Value": [
+        round(ppt_inches, 2),
+        round(tmin_f, 1),
+        round(tmax_f, 1),
+        round(tmean_f, 1)
+    ],
+    "Unit": [
+        "in",
+        "°F",
+        "°F",
+        "°F"
+    ]
+})
+
+print("\nPRISM Climate Data:")
+print(prism_df)
+
+# - - - - - - - - - -
+'''
 CN = float(
     ((int(df_chars.loc["LC11CRPHAY", "value"]) / 100) * 
      ((df_chars.loc["SSURGOA", "value"] * 68 + df_chars.loc["SSURGOB", "value"]
@@ -196,7 +378,4 @@ for precip in precipW:
             pass
             
     print(f"Calculated curve number (CN) for the watershed: {Curve:.1f}")
-
-    
-    
-
+    '''
