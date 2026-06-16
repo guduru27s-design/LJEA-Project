@@ -164,52 +164,33 @@ Wet_CN = float(CN + 4)
 Dry_CN = float(CN - 4)
 
 precipW = [0.5, 1.5, 2.5, 3.0]
-prev = ['CN', 'Wet_CN', 'Dry_CN', 'CN'] # Example precipitation values in inches
-
+prev = ['CN', 'Wet_CN', 'Dry_CN', 'CN'] 
 
 for precip in precipW:
     if prev == 'CN':
         if precip >= 2:
             Curve = Wet_CN
-        else:
-            pass
-    elif prev == 'CN':
-        if precip < 2 and precip > 1:
+        elif precip < 2 and precip > 1:
             Curve = CN
-        else:
-            pass
-    elif prev == 'CN':
-        if precip <= 1:
+        elif precip <= 1:
             Curve = Dry_CN
         else:
             pass
     elif prev == 'Wet_CN':
         if precip >= 2:
             Curve = Wet_CN
-        else:
-            pass
-    elif prev == 'Wet_CN':
-        if precip < 2 and precip > 1:
+        elif precip < 2 and precip > 1:
             Curve = CN
-        else:
-            pass
-    elif prev == 'Wet_CN':
-        if precip <= 1:
+        elif precip <= 1:
             Curve = CN
         else:
             pass
     elif prev == 'Dry_CN':
         if precip < 2 and precip > 1:
             Curve = Dry_CN
-        else:
-            pass
-    elif prev == 'Dry_CN':
-        if precip <= 1:
+        elif precip <= 1:
             Curve = Dry_CN
-        else:
-            pass
-    elif prev == 'Dry_CN':
-        if precip >= 2:
+        elif precip >= 2:
             Curve = CN
         else:
             pass
