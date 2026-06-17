@@ -251,30 +251,38 @@ print(df_chars[["name", "value", "unit"]])
 
 print("\n")
 
-print(f"Fetching basin PRISM data for {ENDDATE}...")
+def get_prism_for_date(date_string):
+    global ppt_inches, tmin_f, tmax_f, tmean_f
 
-if polygon is None:
-    print("No polygon found — skipping PRISM")
-    prism_data = None
-else:
-    prism_data = get_basin_prism(polygon, ENDDATE)
+    print(f"Fetching PRISM data for {date_string}...")
+    if polygon is None:
+        print("No polygon found — skipping PRISM")
+        prism_data = None
+    else:
+        prism_data = get_basin_prism(polygon, ENDDATE)
 
-# Convert PRISM units
+    # Convert PRISM units
 
-ppt_inches = prism_data["ppt"] / 25.4
+    ppt_inches = prism_data["ppt"] / 25.4
 
-tmin_f = (prism_data["tmin"] * 9/5) + 32
-tmax_f = (prism_data["tmax"] * 9/5) + 32
-tmean_f = (prism_data["tmean"] * 9/5) + 32
+    tmin_f = (prism_data["tmin"] * 9/5) + 32
+    tmax_f = (prism_data["tmax"] * 9/5) + 32
+    tmean_f = (prism_data["tmean"] * 9/5) + 32
 
-prism_data = {
-    "ppt": ppt_inches,
-    "tmin": tmin_f,
-    "tmax": tmax_f,
-    "tmean": tmean_f}
+    prism_data = {
+        "ppt": ppt_inches,
+        "tmin": tmin_f,
+        "tmax": tmax_f,
+        "tmean": tmean_f}
 
-# NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
-# IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)
+    print(f"PRISM data for {date_string} extracted and converted!")
+
+    return prism_data
+
+    # NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
+    # IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)
+
+get_prism_for_date(ENDDATE)
 
 prism_day_df = pd.DataFrame({
     "Variable": [
@@ -297,12 +305,13 @@ prism_day_df = pd.DataFrame({
     ]
 })
 
-print("\nPRISM Climate Data (START DAY ONLY):")
+print("\nPRISM Climate Data (END OF RANGE DAY ONLY):")
 print(prism_day_df)
 
 print("\n")
 
 def get_basin_prism_range(polygon_geojson, start_date, end_date):
+    global ppt_per_sum, tmin_per_avg, tmax_per_avg, tmean_per_avg
     
     current = datetime.strptime(start_date, "%Y%m%d")
     end = datetime.strptime(end_date, "%Y%m%d")
@@ -313,41 +322,37 @@ def get_basin_prism_range(polygon_geojson, start_date, end_date):
 
         date_string = current.strftime("%Y%m%d")
         print(f"Fetching PRISM data for {date_string}...")
-        daily_data = get_basin_prism(polygon_geojson, date_string)
-        daily_data["date"] = date_string
+
+        daily_data = get_basin_prism(
+            polygon_geojson,
+            date_string
+        )
 
         all_days.append(daily_data)
 
         current += timedelta(days=1)
 
-    return all_days
+    ppt_total_mm = sum(d["ppt"] for d in all_days)
+
+    tmin_avg_c = np.mean([d["tmin"] for d in all_days])
+    tmax_avg_c = np.mean([d["tmax"] for d in all_days])
+    tmean_avg_c = np.mean([d["tmean"] for d in all_days])
+
+    prism_period_data = {
+        "ppt": ppt_total_mm / 25.4,
+        "tmin": (tmin_avg_c * 9/5) + 32,
+        "tmax": (tmax_avg_c * 9/5) + 32,
+        "tmean": (tmean_avg_c * 9/5) + 32
+    }
+
+    ppt_per_sum = prism_period_data["ppt"]
+    tmin_per_avg = prism_period_data["tmin"]
+    tmax_per_avg = prism_period_data["tmax"]
+    tmean_per_avg = prism_period_data["tmean"]
+
+    return prism_period_data
 
 prism_days = get_basin_prism_range(polygon, STARTDATE, ENDDATE)
-
-#averaging for the whole period
-
-ppt_per_sum = sum([d["ppt"] for d in prism_days])
-
-tmin_per_avg = np.mean([d["tmin"] for d in prism_days])
-
-tmax_per_avg = np.mean([d["tmax"] for d in prism_days])
-
-tmean_per_avg = np.mean([d["tmean"] for d in prism_days])
-
-# convert units for the whole period
-
-ppt_per_sum = ppt_per_sum / 25.4
-
-tmin_per_avg = (tmin_per_avg * 9/5) + 32
-tmax_per_avg = (tmax_per_avg * 9/5) + 32
-tmean_per_avg = (tmean_per_avg * 9/5) + 32
-
-prism_period_data = {
-    "ppt": ppt_per_sum,
-    "tmin": tmin_per_avg,
-    "tmax": tmax_per_avg,
-    "tmean": tmean_per_avg
-}
 
 prism_period_df = pd.DataFrame({
     "Variable": [
