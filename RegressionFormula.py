@@ -1,4 +1,4 @@
-def regression_formula(precipitationDaily, precipitationWeekly, DA, CN, Interflow): 
+def regression_formula(precipitationDaily, precipitationWeekly, DA, CN, ADJ): 
   S= (1000/CN) - 10
   B0= 1
   B1= 1
@@ -9,7 +9,7 @@ def regression_formula(precipitationDaily, precipitationWeekly, DA, CN, Interflo
   formula3= DA * 27878400
   runoff= (((formula1/formula2)/12) * formula3)/86400
   antecedentPrecip= ((precipitationWeekly/12)*(DA * 27878400))/86400
-  interflow= Interflow/86400
+  interflow= ((ADJ + precipitationDaily) * 2323200 * DA)/86400
 
   finalFormula= B1 * runoff + B2 * antecedentPrecip + B3 * interflow + B0
   return finalFormula
