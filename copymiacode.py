@@ -64,7 +64,7 @@ CHAR_CODES = [
     "SSURGOD",     # Percent of watershed area covered by hydric soils, from SSURGO database, buffered to 1000m around streams (%)
 ]
 
-PRECIP_START = DISCHARGE_START = "2020-05-05"
+PRECIP_START = DISCHARGE_START = "2026-05-05"
 PRECIP_END   = DISCHARGE_END   = "2026-05-05"
 
 
