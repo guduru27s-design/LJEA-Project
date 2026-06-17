@@ -252,7 +252,7 @@ print(df_chars[["name", "value", "unit"]])
 print("\n")
 
 def get_prism_for_date(date_string):
-    global ppt_daily, tmin_f, tmax_f, tmean_f
+    global ppt_day, tmin_f, tmax_f, tmean_f
 
     print(f"Fetching PRISM data for {date_string}...")
     if polygon is None:
@@ -263,14 +263,14 @@ def get_prism_for_date(date_string):
 
     # Convert PRISM units
 
-    ppt_daily = prism_data["ppt"] / 25.4
+    ppt_day = prism_data["ppt"] / 25.4
 
     tmin_f = (prism_data["tmin"] * 9/5) + 32
     tmax_f = (prism_data["tmax"] * 9/5) + 32
     tmean_f = (prism_data["tmean"] * 9/5) + 32
 
     prism_data = {
-        "ppt": ppt_daily,
+        "ppt": ppt_day,
         "tmin": tmin_f,
         "tmax": tmax_f,
         "tmean": tmean_f}
@@ -282,9 +282,18 @@ def get_prism_for_date(date_string):
     # NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
     # IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)
 
-get_prism_for_date(ENDDATE)
+def save_end_day_prism():
+    global ppt_daily, tmin_daily, tmax_daily, tmean_daily
 
-prism_day_df = pd.DataFrame({
+    get_prism_for_date(ENDDATE)
+
+    ppt_daily = ppt_day
+    tmin_daily = tmin_f
+    tmax_daily = tmax_f
+    tmean_daily = tmean_f
+
+save_end_day_prism()
+prism_endday_df = pd.DataFrame({
     "Variable": [
         "Precipitation",
         "Minimum Temperature",
@@ -293,9 +302,9 @@ prism_day_df = pd.DataFrame({
     ],
     "Value": [
         round(ppt_daily, 2),
-        round(tmin_f, 1),
-        round(tmax_f, 1),
-        round(tmean_f, 1)
+        round(tmin_daily, 1),
+        round(tmax_daily, 1),
+        round(tmean_daily, 1)
     ],
     "Unit": [
         "in",
@@ -306,10 +315,52 @@ prism_day_df = pd.DataFrame({
 })
 
 
-print("\nPRISM Climate Data (END OF RANGE DAY ONLY):")
-print(prism_day_df)
+print("\nPRISM Climate Data (END DAY ONLY):")
+print(prism_endday_df)
 
 print("\n")
+
+def get_yesterday_prism_str():
+    global previous_day_str
+    end_dt = datetime.strptime(ENDDATE, "%Y%m%d")
+    previous_day = end_dt - timedelta(days=1)
+    previous_day_str = previous_day.strftime("%Y%m%d")
+    return previous_day_str
+
+def save_yesterday_prism():
+    global ppt_yesterday, tmin_yesterday, tmax_yesterday, tmean_yesterday
+
+    get_prism_for_date(get_yesterday_prism_str())
+
+    ppt_yesterday = ppt_day
+    tmin_yesterday = tmin_f
+    tmax_yesterday = tmax_f
+    tmean_yesterday = tmean_f
+
+save_yesterday_prism()
+prism_yesterday_df = pd.DataFrame({
+    "Variable": [
+        "Precipitation",
+        "Minimum Temperature",
+        "Maximum Temperature",
+        "Mean Temperature"
+    ],
+    "Value": [
+        round(ppt_yesterday, 2),
+        round(tmin_yesterday, 1),
+        round(tmax_yesterday, 1),
+        round(tmean_yesterday, 1)
+    ],
+    "Unit": [
+        "in",
+        "°F",
+        "°F",
+        "°F"
+    ]
+})
+
+print("\nPRISM Climate Data (DAY BEFORE END DAY):")
+print(prism_yesterday_df)
 
 def get_basin_prism_range(polygon_geojson, start_date, end_date):
     global ppt_per_sum, tmin_per_avg, tmax_per_avg, tmean_per_avg
