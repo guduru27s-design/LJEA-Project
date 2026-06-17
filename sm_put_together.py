@@ -252,7 +252,7 @@ print(df_chars[["name", "value", "unit"]])
 print("\n")
 
 def get_prism_for_date(date_string):
-    global ppt_inches, tmin_f, tmax_f, tmean_f
+    global ppt_daily, tmin_f, tmax_f, tmean_f
 
     print(f"Fetching PRISM data for {date_string}...")
     if polygon is None:
@@ -263,14 +263,14 @@ def get_prism_for_date(date_string):
 
     # Convert PRISM units
 
-    ppt_inches = prism_data["ppt"] / 25.4
+    ppt_daily = prism_data["ppt"] / 25.4
 
     tmin_f = (prism_data["tmin"] * 9/5) + 32
     tmax_f = (prism_data["tmax"] * 9/5) + 32
     tmean_f = (prism_data["tmean"] * 9/5) + 32
 
     prism_data = {
-        "ppt": ppt_inches,
+        "ppt": ppt_daily,
         "tmin": tmin_f,
         "tmax": tmax_f,
         "tmean": tmean_f}
@@ -292,7 +292,7 @@ prism_day_df = pd.DataFrame({
         "Mean Temperature"
     ],
     "Value": [
-        round(ppt_inches, 2),
+        round(ppt_daily, 2),
         round(tmin_f, 1),
         round(tmax_f, 1),
         round(tmean_f, 1)
@@ -305,6 +305,7 @@ prism_day_df = pd.DataFrame({
     ]
 })
 
+
 print("\nPRISM Climate Data (END OF RANGE DAY ONLY):")
 print(prism_day_df)
 
@@ -312,7 +313,7 @@ print("\n")
 
 def get_basin_prism_range(polygon_geojson, start_date, end_date):
     global ppt_per_sum, tmin_per_avg, tmax_per_avg, tmean_per_avg
-    
+
     current = datetime.strptime(start_date, "%Y%m%d")
     end = datetime.strptime(end_date, "%Y%m%d")
 
