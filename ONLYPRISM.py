@@ -189,7 +189,7 @@ def get_prism_for_date(date_string):
         print("No polygon found — skipping PRISM")
         prism_data = None
     else:
-        prism_data = get_basin_prism(polygon, ENDDATE)
+        prism_data = get_basin_prism(polygon, date_string)
 
     # Convert PRISM units
 
@@ -251,11 +251,9 @@ print(prism_endday_df)
 print("\n")
 
 def get_yesterday_prism_str():
-    global previous_day_str
     end_dt = datetime.strptime(ENDDATE, "%Y%m%d")
     previous_day = end_dt - timedelta(days=1)
-    previous_day_str = previous_day.strftime("%Y%m%d")
-    return previous_day_str
+    return previous_day.strftime("%Y%m%d")
 
 def save_yesterday_prism():
     global ppt_yesterday, tmin_yesterday, tmax_yesterday, tmean_yesterday
@@ -359,3 +357,4 @@ prism_period_df = pd.DataFrame({
 
 print("\nPRISM Climate Data (PERIOD DATA):")
 print(prism_period_df)
+
