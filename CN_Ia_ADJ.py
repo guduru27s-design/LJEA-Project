@@ -1,3 +1,4 @@
+# This is only for values going into the regression equation CSV file!!!
 '''
 ---CN CALCULATION---
 '''
@@ -31,7 +32,7 @@ Norm_CN = float(
         int(df_chars.loc["LC11WETLND", "value"])) / 100) * 
     ((df_chars.loc["SSURGOA", "value"] * 59 + df_chars.loc["SSURGOB", "value"] 
       * 72 + df_chars.loc["SSURGOC", "value"] * 82 +
-      df_chars.loc["SSURGOD", "value"] * 87) / 100) + SLOPECORRECTIONCN
+      df_chars.loc["SSURGOD", "value"] * 87) / 100) + 2
 )
 
 Wet_CN = float(Norm_CN + 4)
@@ -60,8 +61,7 @@ for BSLDEM30FT in df_chars[df_chars["code"] == "BSLDEM30FT"]["value"]:
     elif BSLDEM30FT > 30 and BSLDEM30FT <=45:
         Ia = 0.15
     
-if SLOPECORRECTIONIA != 0.0:
-    Norm_Ia = Ia + SLOPECORRECTIONIA
+Norm_Ia = Ia + -.02
     
 Wet_Ia = float(Norm_Ia + 0.04)
 Dry_Ia = float(Norm_Ia - 0.04)
