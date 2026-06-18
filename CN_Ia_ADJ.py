@@ -55,10 +55,11 @@ else:
 ---IA CALCULATION---
 '''
 
-for BSLDEM30FT in df_chars[df_chars["code"] == "BSLDEM30FT"]["value"]:
-    if BSLDEM30FT > 10 and BSLDEM30FT >= 30:
+if "BSLDEM30FT" in df_chars.index:
+    BSLDEM30FT = float(df_chars.loc["BSLDEM30FT", "value"])
+    if BSLDEM30FT > 10 and BSLDEM30FT <= 30:
         Ia = 0.2
-    elif BSLDEM30FT > 30 and BSLDEM30FT <=45:
+    elif BSLDEM30FT > 30 and BSLDEM30FT <= 45:
         Ia = 0.15
     
 Norm_Ia = Ia + -.02
