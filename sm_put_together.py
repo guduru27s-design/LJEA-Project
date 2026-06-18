@@ -259,7 +259,7 @@ def get_prism_for_date(date_string):
         print("No polygon found — skipping PRISM")
         prism_data = None
     else:
-        prism_data = get_basin_prism(polygon, ENDDATE)
+        prism_data = get_basin_prism(polygon, date_string)
 
     # Convert PRISM units
 
