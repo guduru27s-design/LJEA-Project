@@ -36,8 +36,8 @@ SS_BASIN_CHAR_URL = "https://streamstats.usgs.gov/ss-hydro/v1/basin-characterist
 REGION = input("Enter the region code for your site (e.g. CA for California): ")
 LATITUDE = float(input("Enter the latitude of your site: "))
 LONGITUDE = float(input("Enter the longitude of your site: "))
-STARTDATE = input("Enter the start date for data retrieval (YYYYMMDD) (e.g., 20230101 if looking for data from 20230107): ")
-ENDDATE = input("Enter the end date for data retrieval (YYYYMMDD) (e.g., the date you want to look for): ")
+THEDAY = input("Enter the date you want to look for (YYYYMMDD): ")
+
 SLOPECORRECTIONCN = input("What is the slope correction factor for the CN? (Enter a number, or leave blank for no correction): ")
 if SLOPECORRECTIONCN:
     SLOPECORRECTIONCN = float(SLOPECORRECTIONCN)
@@ -46,6 +46,115 @@ SLOPECORRECTIONIA = input("What is the slope correction factor for the initial a
 if SLOPECORRECTIONIA:
     SLOPECORRECTIONIA = float(SLOPECORRECTIONIA)
 else:    SLOPECORRECTIONIA = 0.0
+
+# get week code
+def get_period(date_string):
+    global STARTDATE, ENDDATE
+    
+    '''
+    Takes the day the user inputted and determines the period range for the week before it (containing the inputted day and 6 days before it)
+    '''
+    STARTDATE = (datetime.strptime(date_string, "%Y%m%d") - timedelta(days=6)).strftime("%Y%m%d")
+    ENDDATE = date_string
+    return STARTDATE, ENDDATE
+
+print("Week Analyzed (LATER):")
+print(get_period(THEDAY))
+
+# MIAS CODE - - - -
+
+SITE_CODES = [
+    "02138500",  # LINVILLE RIVER NEAR NEBO, NC
+    "02137727",  # CATAWBA R NR PLEASANT GARDENS, NC
+]
+
+def get_site_info(site_code: str) -> dict:
+    """
+    Returns {'site_code', 'site_name', 'lat', 'lon', 'state', 'huc'} for a USGS gauge.
+    Raises ValueError if the site is not found.
+    """
+    params = {
+        "format":     "rdb",
+        "sites":      site_code,
+        "siteOutput": "expanded",
+    }
+    r = requests.get(NWIS_SITE_URL, params=params, timeout=30)
+    r.raise_for_status()
+
+    # RDB format: comment lines (#), header, format spec, data rows
+    lines = [ln for ln in r.text.splitlines() if not ln.startswith("#")]
+    if len(lines) < 3:
+        raise ValueError(f"Site {site_code} not found in NWIS")
+
+    headers = lines[0].split("\t")
+    values  = lines[2].split("\t")
+    row     = dict(zip(headers, values))
+
+    return {
+        "site_code": site_code,
+        "site_name": row.get("station_nm", ""),
+        "lat":       float(row["dec_lat_va"]),
+        "lon":       float(row["dec_long_va"]),
+        "state":     row.get("state_cd", ""),
+        "huc":       row.get("huc_cd", ""),
+    }
+print("\nSite 1 Information:")
+print(get_site_info(SITE_CODES[0]))
+print("\nSite 2 Information:")
+print(get_site_info(SITE_CODES[1]))
+
+# - - - - - -
+
+def get_daily_avg_streamflow(site_no, date_string):
+    """
+    Returns average streamflow (cfs) for a single day.
+
+    site_no: USGS site number (string)
+    date_string: YYYYMMDD
+    """
+
+    start_date = datetime.strptime(date_string, "%Y%m%d")
+    end_date = start_date + timedelta(days=1)
+
+    params = {
+        "format": "json",
+        "sites": site_no,
+        "startDT": start_date.strftime("%Y-%m-%d"),
+        "endDT": end_date.strftime("%Y-%m-%d"),
+        "parameterCd": "00060"   # discharge
+    }
+
+    r = requests.get(NWIS_IV_URL, params=params)
+    r.raise_for_status()
+
+    data = r.json()
+
+    values = (
+        data["value"]["timeSeries"][0]
+        ["values"][0]["value"]
+    )
+
+    flows = []
+
+    for point in values:
+        if point["value"] != "":
+            flows.append(float(point["value"]))
+
+    if len(flows) == 0:
+        return None
+
+    return np.mean(flows)
+
+daily_flow = get_daily_avg_streamflow(
+    site_no="02137727",
+    date_string=ENDDATE
+)
+
+print("END DAY STREAMFLOW:")
+
+print(f"Average flow: {daily_flow:.2f} cfs")
+
+# - - - - - -
 
 def delineate_watershed(lat: float, lon: float, region: str) -> dict:
     """
@@ -437,7 +546,6 @@ prism_period_df = pd.DataFrame({
 
 print("\nPRISM Climate Data (PERIOD DATA):")
 print(prism_period_df)
-
 def calculate_cn(df_chars, SLOPECORRECTIONCN):
     '''
     ---CN CALCULATION---
