@@ -1,5 +1,5 @@
 # This is only for values going into the regression equation CSV file!!!
-def calculate_cn_for_calibration(df_chars, SLOPECORRECTIONCN):
+def calculate_cn_for_calibration(df_chars):
     '''
     ---CN CALCULATION---
     '''
@@ -55,9 +55,9 @@ def calculate_cn_for_calibration(df_chars, SLOPECORRECTIONCN):
     else:
         pass
 
-calculate_cn_for_calibration(df_chars, SLOPECORRECTIONCN)
+calculate_cn_for_calibration(df_chars)
 
-def calculate_ia_for_calibration(df_chars, SLOPECORRECTIONIA):
+def calculate_ia_for_calibration(df_chars):
     '''
     ---IA CALCULATION---
     '''
@@ -91,7 +91,7 @@ def calculate_ia_for_calibration(df_chars, SLOPECORRECTIONIA):
     else:
         pass
 
-calculate_ia_for_calibration(df_chars, SLOPECORRECTIONIA)
+calculate_ia_for_calibration(df_chars)
 
 '''Adjustment factor calculation for the CN based on the month of the year and yesterday's precipitation'''    
 def retrieve_month(ENDDATE):
