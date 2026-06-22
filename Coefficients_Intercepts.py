@@ -12,10 +12,6 @@ Returns:
 def new_csv(csv_file):
     df = pd.read_csv(csv_file)
 
-    CN = 50
-    S = (1000 / CN) - 10
-    ADJ= 0.25
-
     new_df = pd.DataFrame()
 
 
