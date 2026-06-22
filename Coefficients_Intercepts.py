@@ -1,10 +1,7 @@
 
 #Import section 
 import pandas as pd
-from sklearn.metrics import r2_score
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-
 """
 This function create a new csv file filling the spreadsheet with calculated values and the headers are runoff, antecedant precipitation, interflow, and streamflow
 Parameters:
@@ -14,30 +11,26 @@ Returns:
 """
 def new_csv(csv_file):
     df = pd.read_csv(csv_file)
- 
-    CN = 50
-    S = (1000 / CN) - 10
-    ADJ= 0.25
 
     new_df = pd.DataFrame()
 
 
     new_df["Runoff"] = (
-        (((df["Daily Precipitation"] - df["Initial Abstraction"] * S) ** 2) /
-        (df["Daily Precipitation"] - (1-df["Initial Abstraction"]) * S ))
-        / 12 * (df["DA"] * 27878400) / 86400
+        (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
+        (df["daily_precip"] - (1-df["IA value"]) * ((100/ df["CN value"]) -10) ))
+        / 12 * (df["drainage_area"] * 27878400) / 86400
         )
 
 
     new_df["Antecedant Precip"] = (
-            (df["Weekly Precipitation"] / 12)
-            * (df["DA"] * 27878400)
+            (df["weekly_precip"] / 12)
+            * (df["drainage_area"] * 27878400)
             / 86400
         )
         
-    new_df["Interflow"] = (((ADJ + df["Daily Precipitation"]) * 2323200 * df["DA"]) / 86400)
+    new_df["Interflow"] = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
 
-    new_df["Streamflow"] = df["Streamflow"]
+    new_df["Streamflow"] = df["streamflow value"]
     
 
     return new_df
