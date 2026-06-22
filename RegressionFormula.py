@@ -1,9 +1,9 @@
-def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, CN, ADJ): 
+def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, CN, ADJ, B0, B1, B2, B3): 
   S= (1000/CN) - 10
-  B0= 1
-  B1= 1
-  B2= 1
-  B3= 1
+  B0= B0
+  B1= B1
+  B2= B2
+  B3= B3
   formula1= (ppt_daily- 0.2 * S) ** 2
   formula2= ppt_daily -0.2 * S + S
   formula3= DRNAREA * 27878400
@@ -14,6 +14,6 @@ def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, CN, ADJ):
   finalFormula= B1 * runoff + B2 * antecedentPrecip + B3 * interflow + B0
   return finalFormula
 
-streamflow= regression_formula(9,8,7,6,5)
+streamflow= regression_formula(9,8,7,6,5,4,3,2,1)
 print(streamflow)
 
