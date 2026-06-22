@@ -105,7 +105,7 @@ print(get_site_info(SITE_CODES[1]))
 
 # - - - - - -
 
-def get_daily_avg_streamflow(site_no, date_string):
+def get_daily_avg_streamflow_original(site_no, date_string):
     """
     Returns average streamflow (cfs) for a single day.
 
