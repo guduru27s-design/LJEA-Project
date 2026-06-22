@@ -145,7 +145,7 @@ def get_daily_avg_streamflow_original(site_no, date_string):
 
     return np.mean(flows)
 
-daily_flow = get_daily_avg_streamflow(
+daily_flow = get_daily_avg_streamflow_original(
     site_no="02137727",
     date_string=ENDDATE
 )
@@ -648,7 +648,7 @@ def retrieve_month(ENDDATE):
     return int(ENDDATE[4:6])
 month = retrieve_month(ENDDATE)
   
-def calculate_daily_adjustment(df):
+def calculate_daily_adjustment_original(df):
     """
     df requires columns: 'month', 'daily_precip', 'yesterday_precip'
     Returns an array for the 'A' variable in Term 3
@@ -674,7 +674,7 @@ def calculate_daily_adjustment(df):
         
     return adjustments
 
-print(calculate_daily_adjustment(pd.DataFrame({
+print(calculate_daily_adjustment_original(pd.DataFrame({
     'month': [month],
     'ppt_yesterday': [ppt_yesterday]
 })))
