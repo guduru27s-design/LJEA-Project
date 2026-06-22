@@ -20,21 +20,21 @@ def new_csv(csv_file):
 
 
     new_df["Runoff"] = (
-        (((df["Daily Precipitation"] - df["Initial Abstraction"] * S) ** 2) /
-        (df["Daily Precipitation"] - (1-df["Initial Abstraction"]) * S ))
-        / 12 * (df["DA"] * 27878400) / 86400
+        (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
+        (df["daily_precip"] - (1-df["IA value"]) * ((100/ df["CN value"]) -10) ))
+        / 12 * (df["drainage_area"] * 27878400) / 86400
         )
 
 
     new_df["Antecedant Precip"] = (
-            (df["Weekly Precipitation"] / 12)
-            * (df["DA"] * 27878400)
+            (df["weekly_precip"] / 12)
+            * (df["drainage_area"] * 27878400)
             / 86400
         )
         
-    new_df["Interflow"] = (((ADJ + df["Daily Precipitation"]) * 2323200 * df["DA"]) / 86400)
+    new_df["Interflow"] = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
 
-    new_df["Streamflow"] = df["Streamflow"]
+    new_df["Streamflow"] = df["streamflow value"]
     
 
     return new_df
@@ -63,3 +63,9 @@ print("B1 (Runoff):", B1)
 print("B2 (Antecedant Precip):", B2)
 print("B3 (Interflow):", B3)
 print("B0 (Intercept):", B0)
+
+
+
+
+
+
