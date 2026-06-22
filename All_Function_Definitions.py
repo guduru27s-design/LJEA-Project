@@ -22,6 +22,9 @@ from shapely.ops import transform
 import pyproj
 from datetime import datetime, timedelta
 import os
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
 
 # Website URLs:
 NWIS_SITE_URL     = "https://waterservices.usgs.gov/nwis/site/"
@@ -288,6 +291,7 @@ def get_basin_characteristics(delineation_response: dict, char_codes: list = Non
         for bc in r.json()
     ]
 
+
 # PRISM Functions:
 def build_prism_cache(polygon, start_date, end_date):
     """
@@ -388,10 +392,112 @@ def get_weekly_precip(prism_cache, date_string):
 
     return total
 
+def get_prism_for_date(date_string):
+    global ppt_day, tmin_f, tmax_f, tmean_f
+
+    print(f"Fetching PRISM data for {date_string}...")
+    if polygon is None:
+        print("No polygon found — skipping PRISM")
+        prism_data = None
+    else:
+        prism_data = get_basin_prism(polygon, date_string)
+
+    # Convert PRISM units
+
+    ppt_day = prism_data["ppt"] / 25.4
+
+    tmin_f = (prism_data["tmin"] * 9/5) + 32
+    tmax_f = (prism_data["tmax"] * 9/5) + 32
+    tmean_f = (prism_data["tmean"] * 9/5) + 32
+
+    prism_data = {
+        "ppt": ppt_day,
+        "tmin": tmin_f,
+        "tmax": tmax_f,
+        "tmean": tmean_f}
+
+    print(f"PRISM data for {date_string} extracted and converted!")
+
+    return prism_data
+
+     '''NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
+     IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)'''
+
+
+def save_end_day_prism():
+    global ppt_daily, tmin_daily, tmax_daily, tmean_daily
+
+    get_prism_for_date(ENDDATE)
+
+    ppt_daily = ppt_day
+    tmin_daily = tmin_f
+    tmax_daily = tmax_f
+    tmean_daily = tmean_f
+
+def get_yesterday_prism_str():
+    global previous_day_str
+    end_dt = datetime.strptime(ENDDATE, "%Y%m%d")
+    previous_day = end_dt - timedelta(days=1)
+    previous_day_str = previous_day.strftime("%Y%m%d")
+    return previous_day_str
+
+def save_yesterday_prism():
+    global ppt_yesterday, tmin_yesterday, tmax_yesterday, tmean_yesterday
+
+    get_prism_for_date(get_yesterday_prism_str())
+
+    ppt_yesterday = ppt_day
+    tmin_yesterday = tmin_f
+    tmax_yesterday = tmax_f
+    tmean_yesterday = tmean_f
+
+def get_basin_prism_range(polygon_geojson, start_date, end_date):
+    global ppt_per_sum, tmin_per_avg, tmax_per_avg, tmean_per_avg
+
+    current = datetime.strptime(start_date, "%Y%m%d")
+    end = datetime.strptime(end_date, "%Y%m%d")
+
+    all_days = []
+
+    while current <= end:
+
+        date_string = current.strftime("%Y%m%d")
+        print(f"Fetching PRISM data for {date_string}...")
+
+        daily_data = get_basin_prism(
+            polygon_geojson,
+            date_string
+        )
+
+        all_days.append(daily_data)
+
+        current += timedelta(days=1)
+
+    ppt_total_mm = sum(d["ppt"] for d in all_days)
+
+    tmin_avg_c = np.mean([d["tmin"] for d in all_days])
+    tmax_avg_c = np.mean([d["tmax"] for d in all_days])
+    tmean_avg_c = np.mean([d["tmean"] for d in all_days])
+
+    prism_period_data = {
+        "ppt": ppt_total_mm / 25.4,
+        "tmin": (tmin_avg_c * 9/5) + 32,
+        "tmax": (tmax_avg_c * 9/5) + 32,
+        "tmean": (tmean_avg_c * 9/5) + 32
+    }
+
+    ppt_per_sum = prism_period_data["ppt"]
+    tmin_per_avg = prism_period_data["tmin"]
+    tmax_per_avg = prism_period_data["tmax"]
+    tmean_per_avg = prism_period_data["tmean"]
+
+    return prism_period_data
+
+
 # CN and Ia for Calibration:
 def calculate_cn_for_calibration(df_chars):
     '''
-    ---CN CALCULATION---
+    ---CN CALCULATION for Calibration---
     '''
 
     Norm_CN = float(
@@ -447,7 +553,7 @@ def calculate_cn_for_calibration(df_chars):
 
 def calculate_ia_for_calibration(df_chars):
     '''
-    ---IA CALCULATION---
+    ---IA CALCULATION for Calibration---
     '''
 
 
@@ -459,6 +565,97 @@ def calculate_ia_for_calibration(df_chars):
             Ia = 0.22
 
     Norm_Ia = Ia + -.02
+        
+    Wet_Ia = float(Norm_Ia + 0.04)
+    Dry_Ia = float(Norm_Ia - 0.04)
+        
+    if ppt_per_sum >= 2:
+        IntialAbstraction = Wet_Ia
+        print(f"Calculated wet initial abstraction (Ia) for the watershed: {IntialAbstraction}")
+        return IntialAbstraction
+    elif ppt_per_sum < 2 and ppt_per_sum > 1:
+        IntialAbstraction = Norm_Ia
+        print(f"Calculated normal initial abstraction (Ia) for the watershed: {IntialAbstraction}")
+        return IntialAbstraction
+    elif ppt_per_sum <= 1:
+        IntialAbstraction = Dry_Ia
+        print(f"Calculated dry initial abstraction (Ia) for the watershed: {IntialAbstraction}")
+        return IntialAbstraction
+    else:
+        pass
+
+# CN and Ia for Predicting Streamflow:
+def calculate_cn(df_chars, SLOPECORRECTIONCN):
+    '''
+    ---CN CALCULATION---
+    '''
+
+    Norm_CN = float(
+        ((int(df_chars.loc["LC11CRPHAY", "value"]) / 100) * 
+        ((df_chars.loc["SSURGOA", "value"] * 68 + df_chars.loc["SSURGOB", "value"]
+        * 76 + df_chars.loc["SSURGOC", "value"] * 
+        83 + df_chars.loc["SSURGOD", "value"] * 87) / 100))
+        + ((int(df_chars.loc["LC11FOREST", "value"]) / 100) *
+        ((df_chars.loc["SSURGOA", "value"] * 30 + df_chars.loc["SSURGOB", "value"]
+            * 60 + df_chars.loc["SSURGOC", "value"] *
+            75 + df_chars.loc["SSURGOD", "value"] * 81) / 100))
+        + ((int(df_chars.loc["LC11DEV", "value"]) / 100) * 
+        ((df_chars.loc["SSURGOA", "value"] * 77 + 
+            df_chars.loc["SSURGOB", "value"] * 85 + df_chars.loc["SSURGOC", "value"]
+            * 90 + df_chars.loc["SSURGOD", "value"] * 92) / 100))
+        + ((int(df_chars.loc["LC11GRASS", "value"]) / 100) * 
+        ((df_chars.loc["SSURGOA", "value"] * 45 + df_chars.loc["SSURGOB", "value"]
+            * 59 + df_chars.loc["SSURGOC", "value"] * 75 +
+            df_chars.loc["SSURGOD", "value"] * 85) / 100))
+        + ((int(df_chars.loc["LC11SHRUB", "value"]) / 100) * 
+        ((df_chars.loc["SSURGOA", "value"] * 35 + df_chars.loc["SSURGOB", "value"]
+            * 56 + df_chars.loc["SSURGOC", "value"] * 70 + 
+            df_chars.loc["SSURGOD", "value"] * 77) / 100))
+        + ((int(df_chars.loc["LC11IMP", "value"]) / 100) *
+        ((df_chars.loc["SSURGOA", "value"] * 98 + df_chars.loc["SSURGOB", "value"]
+            * 98 + df_chars.loc["SSURGOC", "value"] * 98 + 
+            df_chars.loc["SSURGOD", "value"] * 98) / 100))
+        - ((int(df_chars.loc["LC11BARE", "value"]) + 
+            int(df_chars.loc["LC11WATER", "value"]) + 
+            int(df_chars.loc["LC11WETLND", "value"])) / 100) * 
+        ((df_chars.loc["SSURGOA", "value"] * 59 + df_chars.loc["SSURGOB", "value"] 
+        * 72 + df_chars.loc["SSURGOC", "value"] * 82 +
+        df_chars.loc["SSURGOD", "value"] * 87) / 100) + SLOPECORRECTIONCN
+    )
+
+    Wet_CN = float(Norm_CN + 4)
+    Dry_CN = float(Norm_CN - 4)
+
+    if ppt_per_sum >= 2:
+        Curve = Wet_CN
+        print(f"Calculated wet curve number (CN) for the watershed: {Curve}")
+        return Curve
+    elif ppt_per_sum < 2 and ppt_per_sum > 1:
+        Curve = Norm_CN
+        print(f"Calculated normal curve number (CN) for the watershed: {Curve}")
+        return Curve
+    elif ppt_per_sum <= 1:
+        Curve = Dry_CN
+        print(f"Calculated dry curve number (CN) for the watershed: {Curve}")
+        return Curve
+    else:
+        pass
+
+def calculate_ia(df_chars, SLOPECORRECTIONIA):
+    '''
+    ---IA CALCULATION---
+    '''
+
+
+    if "BSLDEM30FT" in df_chars.index:
+        BSLDEM30FT = float(df_chars.loc["BSLDEM30FT", "value"])
+        if BSLDEM30FT > 10 and BSLDEM30FT <= 30:
+            Ia = 0.2
+        elif BSLDEM30FT > 30 and BSLDEM30FT <= 45:
+            Ia = 0.22
+
+    if SLOPECORRECTIONIA != 0.0:
+        Norm_Ia = Ia + SLOPECORRECTIONIA
         
     Wet_Ia = float(Norm_Ia + 0.04)
     Dry_Ia = float(Norm_Ia - 0.04)
@@ -580,3 +777,75 @@ def build_calibration_csv(start_date, end_date, output_file):
 
     return df
 
+# Get week dates for PRISM:
+def get_period(date_string):
+    global STARTDATE, ENDDATE
+    
+    '''
+    Takes the day the user inputted and determines the period range for the week before it (containing the inputted day and 6 days before it)
+    '''
+    STARTDATE = (datetime.strptime(date_string, "%Y%m%d") - timedelta(days=6)).strftime("%Y%m%d")
+    ENDDATE = date_string
+    return STARTDATE, ENDDATE
+
+# Regression Functions:
+def new_csv(csv_file):
+    df = pd.read_csv(csv_file)
+
+    new_df = pd.DataFrame()
+    
+    calc_runoff= (
+                (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
+                (df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10) ))
+                / 12 * (df["drainage_area"] * 27878400) / 86400
+            )
+    
+    new_df["Runoff"]= np.where(df["daily_precip"] <= df["IA value"], 0, calc_runoff)
+            
+    new_df["Antecedant Precip"] = (
+            (df["weekly_precip"] / 12)
+            * (df["drainage_area"] * 27878400)
+            / 86400
+        )
+        
+    new_df["Interflow"] = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
+
+    new_df["Streamflow"] = df["streamflow value"]
+
+    return new_df
+
+
+def make_regression(new_df):
+
+    X = new_df[["Runoff", "Antecedant Precip", "Interflow"]]
+    Y = new_df["Streamflow"]
+    
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+    lr = LinearRegression()
+    lr.fit(X_train, Y_train)
+
+    B1= lr.coef_[0]
+    B2= lr.coef_[1]
+    B3= lr.coef_[2]
+    B0= lr.intercept_
+    
+    R2= r2_score(Y_test, lr.predict(X_test))
+
+    return B1, B2, B3, B0, R2
+
+def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, InitialAbstraction, B0, B1, B2, B3): 
+  S = (1000 / Curve) - 10
+  B0 = B0
+  B1 = B1
+  B2 = B2
+  B3 = B3
+  formula1 = (ppt_daily - InitialAbstraction * S) ** 2
+  formula2 = ppt_daily - InitialAbstraction * S
+  formula3 = DRNAREA * 27878400
+  runoff = (((formula1 / formula2) / 12) * formula3) / 86400
+  baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
+  interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
+
+  finalFormula= B1 * runoff + B2 * baseflow + B3 * interflow + B0
+  return finalFormula
