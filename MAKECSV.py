@@ -1,7 +1,5 @@
-# CODE THAT BRINGS EVERYTHING TOGETHER TO GRAB DATA FOR ALL THE DATES WE ASK FOR AND PUTS THE STUFF IN CSV?
-'''
-I HOPE THIS WORKS
-'''
+# MAKES CSV FILE (TESTING)
+
 import pandas as pd
 import statsmodels.formula.api as smf
 import matplotlib.pyplot as plt
