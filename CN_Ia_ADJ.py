@@ -70,8 +70,7 @@ def calculate_ia_for_calibration(df_chars):
         elif BSLDEM30FT > 30 and BSLDEM30FT <= 45:
             Ia = 0.22
 
-    if SLOPECORRECTIONIA != 0.0:
-        Norm_Ia = Ia + -.02
+    Norm_Ia = Ia + -.02
         
     Wet_Ia = float(Norm_Ia + 0.04)
     Dry_Ia = float(Norm_Ia - 0.04)
