@@ -9,7 +9,7 @@ def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, Init
   formula3 = DRNAREA * 27878400
   runoff = (((formula1 / formula2) / 12) * formula3) / 86400
   baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
-  interflow = ((ADJ + ppt_daily) * 2323200 * DRNAREA) / 86400
+  interflow = ((adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
 
   finalFormula= B1 * runoff + B2 * baseflow + B3 * interflow + B0
   return finalFormula
