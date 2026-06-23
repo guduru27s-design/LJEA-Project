@@ -73,10 +73,6 @@ def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, Init
     finalFormula = B1 * runoff + B2 * baseflow + B3 * interflow + B0
     return finalFormula
 
-
-# --- MAIN EXECUTION ---
-
-# FIX: Changed variable name to calibration_df so it doesn't overwrite the new_csv function
 calibration_df = new_csv(r"C:\Users\GUDUR\Downloads\calibration_output.csv")
 B1_cal, B2_cal, B3_cal, B0_cal, R2_cal, _, _, _ = make_regression(calibration_df)
 
@@ -96,11 +92,11 @@ print("B3 (Interflow):", B3)
 print("B0 (Intercept):", B0)
 print("R squared:", R2)
 
-# Single formula testing
+
 streamflow = regression_formula(0.00025333411, 0.001078417206, 127, 53.519594, -0.02, 0.16, B0, B1, B2, B3)
 print("\nPredicted Single Streamflow:", streamflow)
 
-# Residual Plots
+
 X = new_df[["Runoff", "Antecedent Precip", "Interflow"]]
 Y = new_df["Streamflow"]
 
