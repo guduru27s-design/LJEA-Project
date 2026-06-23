@@ -28,7 +28,11 @@ def new_csv(csv_file):
         (df["weekly_precip"] / 12) * (df["drainage_area"] * 27878400) / 86400
     )
         
-    new_df["Interflow"] = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
+    # Calculate the raw interflow as you normally do
+    calc_interflow = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
+
+    # Force any value below 0 to be exactly 0
+    new_df["Interflow"] = np.maximum(0, calc_interflow)
     new_df["Streamflow"] = df["streamflow value"]
 
     # CRITICAL: Clean out any lingering infinity or NaN values
@@ -86,7 +90,8 @@ def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, Init
         runoff = (((formula1 / formula2) / 12) * formula3) / 86400
 
     baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
-    interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
+    raw_interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
+    interflow = max(0, raw_interflow) # Using Python's built-in max() for a single number
 
     return (B1 * runoff) + (B2 * baseflow) + (B3 * interflow) + B0
 
