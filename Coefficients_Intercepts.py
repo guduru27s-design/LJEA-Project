@@ -19,7 +19,7 @@ def new_csv(csv_file):
     
     calc_runoff= (
                 (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
-                (df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10) ))
+                (df["daily_precip"] + (1 - df["IA value"]) * ((100/ df["CN value"]) -10) ))
                 / 12 * (df["drainage_area"] * 27878400) / 86400
             )
     
