@@ -798,33 +798,39 @@ def get_period(date_string):
 # Regression Functions:
 def new_csv(csv_file):
     df = pd.read_csv(csv_file)
-
     new_df = pd.DataFrame()
     
-    calc_runoff= (
-                (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
-                (df["daily_precip"] + (1 - df["IA value"]) * ((100/ df["CN value"]) -10) ))
-                / 12 * (df["drainage_area"] * 27878400) / 86400
-            )
+    S = (1000 / df["CN value"]) - 10
     
-    new_df["Runoff"]= np.where(df["daily_precip"] <= (df["IA value"] * ((100/ df["CN value"]) -10)), 0, calc_runoff)
+    # Added 1e-9 to prevent division by zero if the denominator hits exactly 0
+    denominator = df["daily_precip"] + (1 - df["IA value"]) * S + 1e-9
+    
+    calc_runoff = (
+        (((df["daily_precip"] - df["IA value"] * S) ** 2) / denominator)
+        / 12 * (df["drainage_area"] * 27878400) / 86400
+    )
+    
+    new_df["Runoff"] = np.where(df["daily_precip"] <= (df["IA value"] * S), 0, calc_runoff)
             
-    new_df["Antecedant Precip"] = (
-            (df["weekly_precip"] / 12)
-            * (df["drainage_area"] * 27878400)
-            / 86400
-        )
+    new_df["Antecedent Precip"] = (
+        (df["weekly_precip"] / 12) * (df["drainage_area"] * 27878400) / 86400
+    )
         
-    new_df["Interflow"] = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
+    # Calculate the raw interflow as you normally do
+    calc_interflow = (((df["ADJ value"] + df["daily_precip"]) * 2323200 * df["drainage_area"]) / 86400)
 
+    # Force any value below 0 to be exactly 0
+    new_df["Interflow"] = np.maximum(0, calc_interflow)
     new_df["Streamflow"] = df["streamflow value"]
+
+    # CRITICAL: Clean out any lingering infinity or NaN values
+    new_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    new_df.dropna(inplace=True)
 
     return new_df
 
-
 def make_regression(new_df):
-
-    X = new_df[["Runoff", "Antecedant Precip", "Interflow"]]
+    X = new_df[["Runoff", "Antecedent Precip", "Interflow"]]
     Y = new_df["Streamflow"]
     
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
@@ -832,31 +838,26 @@ def make_regression(new_df):
     lr = LinearRegression()
     lr.fit(X_train, Y_train)
 
-    B1= lr.coef_[0]
-    B2= lr.coef_[1]
-    B3= lr.coef_[2]
-    B0= lr.intercept_
+    B1, B2, B3 = lr.coef_
+    B0 = lr.intercept_
     
-    R2= r2_score(Y_test, lr.predict(X_test))
+    R2 = r2_score(Y_test, lr.predict(X_test))
 
-    return B1, B2, B3, B0, R2
+    return B1, B2, B3, B0, R2, lr
 
 def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, InitialAbstraction, B0, B1, B2, B3): 
-  S = (1000 / Curve) - 10
-  B0 = B0
-  B1 = B1
-  B2 = B2
-  B3 = B3
+    S = (1000 / Curve) - 10
       
-  formula1 = (ppt_daily - InitialAbstraction * S) ** 2
-  formula2 = ppt_daily + (1 - InitialAbstraction) * S
-  formula3 = DRNAREA * 27878400
-  if ppt_daily <= (InitialAbstraction * S):
-    runoff = 0
-  else:
-    runoff = (((formula1 / formula2) / 12) * formula3) / 86400
-  baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
-  interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
+    if ppt_daily <= (InitialAbstraction * S):
+        runoff = 0
+    else:
+        formula1 = (ppt_daily - InitialAbstraction * S) ** 2
+        formula2 = ppt_daily + (1 - InitialAbstraction) * S
+        formula3 = DRNAREA * 27878400
+        runoff = (((formula1 / formula2) / 12) * formula3) / 86400
 
-  finalFormula = B1 * runoff + B2 * baseflow + B3 * interflow + B0
-  return finalFormula
+    baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
+    raw_interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
+    interflow = max(0, raw_interflow) # Using Python's built-in max() for a single number
+    finalFormula = (B1 * runoff) + (B2 * baseflow) + (B3 * interflow) + B0
+    return finalFormula
