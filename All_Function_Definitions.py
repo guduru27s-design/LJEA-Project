@@ -696,7 +696,7 @@ def calculate_daily_adjustment(month, ppt_yesterday):
     
     adjustments = et_loss + priming_bonus
     
-    print(f"Calculated daily adjustment for {THEDAY}: {adjustments}")
+    print(f"Calculated daily adjustment: {adjustments}")
 
     return adjustments
 
