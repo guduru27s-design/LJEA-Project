@@ -98,7 +98,7 @@ def build_gauge_data(site_code):
         "prism_cache": prism_cache,
         "polygon": polygon
     }
-'''
+
 def get_daily_avg_streamflow(site_no, date_string):
     #Get daily average streamflow from a site for date. 
     start_date = datetime.strptime(date_string, "%Y%m%d")
@@ -129,7 +129,7 @@ def get_daily_avg_streamflow(site_no, date_string):
     ]
 
     return np.mean(flows) if flows else None
-'''
+
 # Functions for basins:
 def delineate_watershed(lat: float, lon: float, region: str) -> dict:
     """
