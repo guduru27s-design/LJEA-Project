@@ -27,6 +27,7 @@ import os
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+import csv
 
 # Website URLs:
 NWIS_SITE_URL     = "https://waterservices.usgs.gov/nwis/site/"
@@ -97,9 +98,9 @@ def build_gauge_data(site_code):
         "prism_cache": prism_cache,
         "polygon": polygon
     }
-
+'''
 def get_daily_avg_streamflow(site_no, date_string):
-  ''' Get daily average streamflow from a site for date. '''
+    #Get daily average streamflow from a site for date. 
     start_date = datetime.strptime(date_string, "%Y%m%d")
     end_date = start_date + timedelta(days=1)
 
@@ -128,7 +129,7 @@ def get_daily_avg_streamflow(site_no, date_string):
     ]
 
     return np.mean(flows) if flows else None
-
+'''
 # Functions for basins:
 def delineate_watershed(lat: float, lon: float, region: str) -> dict:
     """
@@ -422,8 +423,8 @@ def get_prism_for_date(date_string):
 
     return prism_data
 
-     '''NOTE: extract PRISM values from the list and turn them into variables we can pull from for regression
-     IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)'''
+'''note: extract PRISM values from the list and turn them into variables we can pull from for regression
+IF YOU ACTUALLY CALL THE prism_data, IT WILL PRINT OUT THE FULL DICT WITH ALL 4 ELEMENTS CONVERTED (ppt, tmin, tmax, tmean)'''
 
 
 def save_end_day_prism():
@@ -692,8 +693,12 @@ def calculate_daily_adjustment(month, ppt_yesterday):
         et_loss = -0.02
 
     priming_bonus = 0.04 if ppt_yesterday > 0.5 else 0.0
+    
+    adjustments = et_loss + priming_bonus
+    
+    print(f"Calculated daily adjustment for {THEDAY}: {adjustments}")
 
-    return et_loss + priming_bonus
+    return adjustments
 
 # For Calibration and CSV: 
 def build_calibration_row(date_string, site_name, site_code):
@@ -798,11 +803,11 @@ def new_csv(csv_file):
     
     calc_runoff= (
                 (((df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10)) ** 2) /
-                (df["daily_precip"] - df["IA value"] * ((100/ df["CN value"]) -10) ))
+                (df["daily_precip"] + (1 - df["IA value"]) * ((100/ df["CN value"]) -10) ))
                 / 12 * (df["drainage_area"] * 27878400) / 86400
             )
     
-    new_df["Runoff"]= np.where(df["daily_precip"] <= df["IA value"], 0, calc_runoff)
+    new_df["Runoff"]= np.where(df["daily_precip"] <= (df["IA value"] * ((100/ df["CN value"]) -10)), 0, calc_runoff)
             
     new_df["Antecedant Precip"] = (
             (df["weekly_precip"] / 12)
@@ -842,20 +847,24 @@ def regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, Init
   B1 = B1
   B2 = B2
   B3 = B3
+      
   formula1 = (ppt_daily - InitialAbstraction * S) ** 2
-  formula2 = ppt_daily - InitialAbstraction * S
+  formula2 = ppt_daily + (1 - InitialAbstraction) * S
   formula3 = DRNAREA * 27878400
-  runoff = (((formula1 / formula2) / 12) * formula3) / 86400
+  if ppt_daily <= (InitialAbstraction * S):
+    runoff = 0
+  else:
+    runoff = (((formula1 / formula2) / 12) * formula3) / 86400
   baseflow = ((ppt_per_sum / 12) * (DRNAREA * 27878400)) / 86400
   interflow = ((Adjustments + ppt_daily) * 2323200 * DRNAREA) / 86400
 
-  finalFormula= B1 * runoff + B2 * baseflow + B3 * interflow + B0
+  finalFormula = B1 * runoff + B2 * baseflow + B3 * interflow + B0
   return finalFormula
 
 # Call Functions in order:
 # Make new csv and make regression:
-new_csv= new_csv(r"C:\Users\GUDUR\Downloads\calibration_output.csv")
-B1, B2, B3, B0, R2= make_regression(new_csv)
+csv = new_csv(r"/Users/smgallop08/Documents/calibration_output(1).csv")
+B1, B2, B3, B0, R2= make_regression(csv)
 
 print("B1 (Runoff):", B1)
 print("B2 (Antecedant Precip):", B2)
@@ -933,12 +942,51 @@ print("\n")
 # Get PRISM Data:
 save_end_day_prism()
 print("\nPRISM Climate Data (END DAY ONLY):")
-print(prism_endday_df)
+print(prism_data_df := pd.DataFrame({
+    "Variable": [
+        "Precipitation",
+        "Minimum Temperature",
+        "Maximum Temperature",
+        "Mean Temperature"
+    ],
+    "Value": [
+        round(ppt_daily, 2),
+        round(tmin_daily, 1),
+        round(tmax_daily, 1),
+        round(tmean_daily, 1)
+    ],
+    "Unit": [
+        "in",
+        "°F",
+        "°F",
+        "°F"
+    ]
+}))
 print("\n")
 
 save_yesterday_prism()
 print("\nPRISM Climate Data (DAY BEFORE END DAY):")
-print(prism_yesterday_df)
+print(prism_yesterday_df := pd.DataFrame({
+    "Variable": [
+        "Precipitation",
+        "Minimum Temperature",
+        "Maximum Temperature",
+        "Mean Temperature"
+    ],
+    "Value": [
+        round(ppt_yesterday, 2),
+        round(tmin_yesterday, 1),
+        round(tmax_yesterday, 1),
+        round(tmean_yesterday, 1)
+    ],
+    "Unit": [
+        "in",
+        "°F",
+        "°F",
+        "°F"
+    ]
+}))
+print("\n")
 
 prism_days = get_basin_prism_range(polygon, STARTDATE, ENDDATE)
 
@@ -966,15 +1014,13 @@ prism_period_df = pd.DataFrame({
 print("\nPRISM Climate Data (PERIOD DATA):")
 print(prism_period_df)
 
-# Calculate CN, Ia, and Adjustments
-calculate_cn(df_chars, SLOPECORRECTIONCN)
-calculate_ia(df_chars, SLOPECORRECTIONIA)
-month = retrieve_month(ENDDATE)
-print(calculate_daily_adjustment_original(pd.DataFrame({
-    'month': [month],
-    'ppt_yesterday': [ppt_yesterday]
-})))
+# Calculate CN, Ia, and Adjustments and explicitly define variables for regression formula:
+Curve = calculate_cn(df_chars, SLOPECORRECTIONCN)
+InitialAbstraction =calculate_ia(df_chars, SLOPECORRECTIONIA)
+month = retrieve_month(THEDAY)
+Adjustments = calculate_daily_adjustment(month, ppt_yesterday)
+DRNAREA = float(df_chars.loc["DRNAREA", "value"])
 
+# Calculate the streamflow using the regression formula with the calculated parameters and PRISM data::
 streamflow = regression_formula(ppt_daily, ppt_per_sum, DRNAREA, Curve, Adjustments, InitialAbstraction, B0, B1, B2, B3)
 print(f"Streamflow for {LATITUDE}, {LONGITUDE} on {THEDAY} is {streamflow} cfs.")
-
